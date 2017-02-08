@@ -1,0 +1,13 @@
+// $Id$
+// vim:ft=javascript
+
+// If your extension references something external, use ARG_WITH
+// ARG_WITH("smartcrop", "for smartcrop support", "no");
+
+// Otherwise, use ARG_ENABLE
+// ARG_ENABLE("smartcrop", "enable smartcrop support", "no");
+
+if (PHP_SMARTCROP != "no") {
+	EXTENSION("smartcrop", "smartcrop.c", PHP_EXTNAME_SHARED, "/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1");
+}
+

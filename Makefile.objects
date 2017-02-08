@@ -1,0 +1,8 @@
+smartcrop.lo: /etc/php7/php-src/ext/smartcrop/smartcrop.c
+	$(LIBTOOL) --mode=compile $(CC) -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -I. -I/etc/php7/php-src/ext/smartcrop $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)  -c /etc/php7/php-src/ext/smartcrop/smartcrop.c -o smartcrop.lo 
+$(phplibdir)/smartcrop.la: ./smartcrop.la
+	$(LIBTOOL) --mode=install cp ./smartcrop.la $(phplibdir)
+
+./smartcrop.la: $(shared_objects_smartcrop) $(SMARTCROP_SHARED_DEPENDENCIES)
+	$(LIBTOOL) --mode=link $(CC) $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS) $(LDFLAGS) -o $@ -export-dynamic -avoid-version -prefer-pic -module -rpath $(phplibdir) $(EXTRA_LDFLAGS) $(shared_objects_smartcrop) $(SMARTCROP_SHARED_LIBADD)
+

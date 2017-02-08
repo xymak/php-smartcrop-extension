@@ -1,0 +1,9 @@
+#! /bin/sh
+#
+# Created by configure
+
+'./configure' \
+'--prefix=/etc/php7' \
+'--with-libdir=/lib/x86_64-linux-gnu' \
+'--with-php-config=/etc/php7/bin/php-config' \
+"$@"
