@@ -77,57 +77,56 @@ PHP_INI_END()
 /* Every user-visible function in PHP should document itself in the source */
 /* {{{ proto string confirm_smartcrop_compiled(string arg)
    Return a string to confirm that the module is compiled in */
-static int *getRgbColorAt(zval *IM, zend_long X, zend_long Y){
-    zval *function_name, *zv_r, *zv_g, *zv_b, *zv_a, *retval_ptr;
-    zval get_colorindex_params[3];
-    zval get_color_params[2];
-    static int rgb[4],rgbHex;
+static int *getRgbColorAt(zval *im, zend_long x, zend_long y){
+    zval functionName, retval, aParams[3];
+    static int aRgb[4];
+    int rgb;
 
-    function_name = emalloc(sizeof(zval));
-    retval_ptr = emalloc(sizeof(zval));
+    ZVAL_STRING(&functionName, "imagecolorat");
+    ZVAL_ZVAL(&aParams[0], im, 1, 0);
+    ZVAL_LONG(&aParams[1], x);
+    ZVAL_LONG(&aParams[2], y);
+    call_user_function(EG(function_table),NULL,&functionName, &retval,3,aParams TSRMLS_CC);
+    rgb = Z_LVAL_P(&retval);
+    aRgb[0] = rgb >> 16;
+    aRgb[1] = rgb >> 8 & 255;
+    aRgb[2] = rgb & 255;
 
-    ZVAL_STRING(function_name, "imagecolorat");
-    ZVAL_ZVAL(&get_colorindex_params[0], IM, 1, 0);
-    ZVAL_LONG(&get_colorindex_params[1], X);
-    ZVAL_LONG(&get_colorindex_params[2], Y);
-    call_user_function(EG(function_table),NULL,function_name, retval_ptr,3,get_colorindex_params TSRMLS_CC);
-    rgbHex = Z_LVAL_P(retval_ptr);
-    rgb[0] = rgbHex >> 16;
-    rgb[1] = rgbHex >> 8 & 255;
-    rgb[2] = rgbHex & 255;
-
-    return rgb;
+    return aRgb;
 }
 static float cie(float r, float g, float b) {
     return 0.5126 * b + 0.7152 * g + 0.0722 * r;
 }
-static float sample(zval *IM, zend_long X, zend_long Y){
-    int *rgb_ptr;
-    rgb_ptr = getRgbColorAt(IM,X,Y);
-    return cie(*rgb_ptr,*(rgb_ptr+1),*(rgb_ptr+2));
+static float sample(zval *im, zend_long x, zend_long y){
+    int *aRgb;
+    aRgb = getRgbColorAt(im,x,y);
+    return cie(*aRgb,*(aRgb+1),*(aRgb+2));
 }
-static int edgeDetect(zval *IM, zend_long X, zend_long Y, zend_long W, zend_long H){
-    float lightness, leftLightness, centerLightness, rightLightness, topLightness,bottomLightness;
-    if (X == 0 || X >= W-1 || Y == 0 || Y >= H-1) {
-        lightness = sample(IM,X,Y);
+static float edgeDetect(zval *im, zend_long x, zend_long y, zend_long w, zend_long h){
+    float lightness, leftLightness, topLightness,bottomLightness;
+    static float centerLightness, rightLightness;
+    if (x == 0 || x >= w-1 || y == 0 || y >= h-1) {
+        lightness = sample(im, x, y);
     } else {
-        leftLightness = sample(IM,X-1,Y);
-        centerLightness = sample(IM,X,Y);
-        rightLightness = sample(IM,X+1,Y);
-        topLightness = sample(IM,X,Y-1);
-        bottomLightness = sample(IM,X,Y+1);
-        lightness = centerLightness*4.0 - leftLightness - rightLightness - topLightness - bottomLightness;
+        if ( x > 1) {
+            leftLightness = centerLightness;
+            centerLightness = rightLightness;
+        }
+        rightLightness = sample(im, x+1, y);
+        topLightness = sample(im, x, y-1);
+        bottomLightness = sample(im, x, y+1);
+        lightness = centerLightness * 4.0 - leftLightness - rightLightness - topLightness - bottomLightness;
     }
     return lightness;
 }
 static float skinColor(float r, float g, float b) {
     float mag, rd, gd, bd, d;
-    mag = sqrt(r*r + g*g + b*b);
-    rd = (r/mag - OPTION_SKIN_COLOR_R);
-    gd = (g/mag - OPTION_SKIN_COLOR_G);
-    bd = (b/mag - OPTION_SKIN_COLOR_B);
-    d = sqrt(rd*rd + gd*gd+bd*bd);
-    return 1-d;
+    mag = sqrt(r * r + g * g + b * b);
+    rd = (r / mag - OPTION_SKIN_COLOR_R);
+    gd = (g / mag - OPTION_SKIN_COLOR_G);
+    bd = (b / mag - OPTION_SKIN_COLOR_B);
+    d = sqrt(rd * rd + gd * gd + bd * bd);
+    return 1.0 - d;
 }
 static float skinDetect(float r, float g, float b, float lightness) {
     float skin;
@@ -147,10 +146,10 @@ static float skinDetect(float r, float g, float b, float lightness) {
 static float saturation(float r, float g, float b){
     float maximum, minimum, l, d;
     
-    maximum = (r/255) > (g/255) ? (r/255) : (g/255);
-    maximum = maximum > (b/255) ? maximum : (b/255);
-    minimum = (r/255) < (g/255) ? (r/255) : (g/255);
-    minimum = minimum < (b/255) ? minimum : (b/255);
+    maximum = (r / 255) > (g / 255) ? (r / 255) : (g / 255);
+    maximum = maximum > (b / 255) ? maximum : (b / 255);
+    minimum = (r / 255) < (g / 255) ? (r / 255) : (g / 255);
+    minimum = minimum < (b / 255) ? minimum : (b / 255);
 
     if (maximum == minimum) {
         return 0;
@@ -170,7 +169,7 @@ static float saturationDetect(float r, float g, float b, float lightness){
     acceptableSaturation = sat > OPTION_SATURATION_THRESHOLD ? 1 : 0;
     acceptableLightness = (lightness >= OPTION_SATURATION_BRIGHTNESS_MIN && lightness <= OPTION_SATURATION_BRIGHTNESS_MAX) ? 1 : 0;
     if (acceptableLightness && acceptableSaturation) {
-        return (sat - OPTION_SATURATION_THRESHOLD) * (255 / (1-OPTION_SATURATION_THRESHOLD));
+        return (sat - OPTION_SATURATION_THRESHOLD) * (255 / (1 - OPTION_SATURATION_THRESHOLD));
     } else {
         return 0;
     }
@@ -180,11 +179,11 @@ static int *downSample(int w, int h, float *od){
     float width, height, ifactor2, x, y, u, v, r, g, b, a, mr, mg, mb, pR, pG, pB, pA;
     static float *data;
 
-    width = floor(w/OPTION_SCORE_DOWN_SAMPLE);
-    height = floor(h/OPTION_SCORE_DOWN_SAMPLE);
+    width = floor(w / OPTION_SCORE_DOWN_SAMPLE);
+    height = floor(h / OPTION_SCORE_DOWN_SAMPLE);
     ifactor2 = 1.0 / (OPTION_SCORE_DOWN_SAMPLE * OPTION_SCORE_DOWN_SAMPLE);
 
-    data = (float*)emalloc(width*height*4*sizeof(float));
+    data = (float*) emalloc(width * height * 4 * sizeof(float));
 
     for (y = 0; y < height; y++) {
         for (x = 0; x < width; x++) {
@@ -218,28 +217,28 @@ static int *downSample(int w, int h, float *od){
     }
     return data;
 }
-static int * generateCrops(int w, int h, int cw, int ch){
+static int *generateCrops(int w, int h, int cw, int ch){
     int cropWidth, cropHeight, x, y, p;
-    static int * result;
+    static int *result;
     cropWidth = cw;
     cropHeight = ch;
     if (cw == w) {
-        result = (int*)emalloc(sizeof(int)*(h-cropHeight)/OPTION_STEP*2);
+        result = (int*) emalloc(sizeof(int) * (h - cropHeight) / OPTION_STEP * 2);
     } else {
-        result = (int*)emalloc(sizeof(int)*(w-cropWidth)/OPTION_STEP*2);
+        result = (int*) emalloc(sizeof(int) * (w - cropWidth) / OPTION_STEP * 2);
     }
     p = 0;
     for (y = 0; y + cropHeight <= h; y += OPTION_STEP) {
         for (x = 0; x + cropWidth <= w; x += OPTION_STEP) {
             result[p]=x;
-            result[p+1]=y;
+            result[p + 1]=y;
             p += 2;                      
         }
     }
     return result;
 }
 static float thirds(float x) {
-    x = ((float)((int)(x - (1.0/3.0) + 1.0) % 2) * 0.5 - 0.5) * 16.0;
+    x = ((float)((int)(x - (1.0 / 3.0) + 1.0) % 2) * 0.5 - 0.5) * 16.0;
     return (1.0 - x * x) > 0.0 ? (1.0 - x * x) : 0.0;
 }
 static float importance(float cx, float cy, float cw, float ch, float x, float y) {
@@ -279,7 +278,6 @@ static float score(float *output, int cx, int cy, int cw, int ch, int w, int h) 
            i = importance(cx, cy, cw, ch, x, y);
            p = floor(y / downSample) * outputWidth * 4 + floor(x / downSample) * 4;
            detail += (*(output+p+1) / 255) * i;
-           //detail = p;
            skin += *(output + p) / 255 * (detail + OPTION_SKIN_BIAS) * i;
            saturation += *(output + p + 2) / 255 * (detail + OPTION_SATURATION_BIAS) * i;
         }
@@ -290,61 +288,49 @@ static float score(float *output, int cx, int cy, int cw, int ch, int w, int h) 
 }
 PHP_FUNCTION(smartcrop)
 {
-    zval *SIM;
+    zval *sim;
     zend_long DW, DH;
-    zval *function_name;
-    zval *retval_ptr;
+    zval functionName;
+    zval retval;
     zend_long SW, SH, RW, RH;
-    zval *IM_CANVAS;
-    zval *RIM;
-    float sw, sh, dw, dh, rw, rh, scale;
+    zval rim;
+    float dw, dh, rw, rh, scale;
     
     
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "zll", &SIM, &DW, &DH )
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "zll", &sim, &DW, &DH )
         == FAILURE)
     {
         RETURN_FALSE;
     }
 
-    function_name = emalloc(sizeof(zval));
-    retval_ptr = emalloc(sizeof(zval));
-    IM_CANVAS = emalloc(sizeof(zval));
-    RIM = emalloc(sizeof(zval));
-    SW = emalloc(sizeof(zval));
-    SH = emalloc(sizeof(zval));
 
-    //zval **params=(zval**)emalloc(sizeof(zval));
-    zval **params;
-    params = SIM;
+    zval params[1];
+    ZVAL_ZVAL(&params[0], sim, 1, 0);
 
-    /* Get image source size*/
-    ZVAL_STRING(function_name, "imagesx");
-    call_user_function(EG(function_table),NULL,function_name,retval_ptr,1,params TSRMLS_CC);
-    SW = Z_LVAL_P(retval_ptr);
+    ZVAL_STRING(&functionName, "imagesx");
+    call_user_function(EG(function_table),NULL,&functionName,&retval,1,params TSRMLS_CC);
+    SW = Z_LVAL_P(&retval);
     
-    ZVAL_STRING(function_name, "imagesy");
-    call_user_function(EG(function_table),NULL,function_name,retval_ptr,1,params TSRMLS_CC);
-    SH = Z_LVAL_P(retval_ptr);
+    ZVAL_STRING(&functionName, "imagesy");
+    call_user_function(EG(function_table),NULL,&functionName,&retval,1,params TSRMLS_CC);
+    SH = Z_LVAL_P(&retval);
 
-    sw = SW;
-    sh = SH;
     dw = DW;
     dh = DH;
-    scale = (dw / sw) > (dh / sh) ? (dw / sw) : (dh / sh);
-    RW = floor(sw * scale);
-    RH = floor(sh * scale);
+    scale = (dw / SW) > (dh / SH) ? (dw / SW) : (dh / SH);
+    RW = floor(SW * scale);
+    RH = floor(SH * scale);
 
     zval canvas_params[2];
     ZVAL_LONG(&canvas_params[0], RW);
     ZVAL_LONG(&canvas_params[1], RH);
     
-    /* Scale image size */
-    ZVAL_STRING(function_name, "imagecreatetruecolor");
-    call_user_function(EG(function_table),NULL,function_name,IM_CANVAS,2,canvas_params TSRMLS_CC);
+    ZVAL_STRING(&functionName, "imagecreatetruecolor");
+    call_user_function(EG(function_table),NULL,&functionName,&rim,2,canvas_params TSRMLS_CC);
     
     zval resize_params[10];
-    ZVAL_ZVAL(&resize_params[0], IM_CANVAS, 1, 0);
-    ZVAL_ZVAL(&resize_params[1], SIM, 1, 0);
+    ZVAL_ZVAL(&resize_params[0], &rim, 1, 0);
+    ZVAL_ZVAL(&resize_params[1], sim, 1, 0);
     ZVAL_LONG(&resize_params[2],0);
     ZVAL_LONG(&resize_params[3],0);
     ZVAL_LONG(&resize_params[4],0);
@@ -353,10 +339,8 @@ PHP_FUNCTION(smartcrop)
     ZVAL_LONG(&resize_params[7],RH);
     ZVAL_LONG(&resize_params[8],SW);
     ZVAL_LONG(&resize_params[9],SH);
-    ZVAL_STRING(function_name, "imagecopyresampled");
-    call_user_function(EG(function_table),NULL,function_name,RIM,10,resize_params TSRMLS_CC);
-
-    //RETURN_ZVAL(IM_CANVAS, 1, 1);
+    ZVAL_STRING(&functionName, "imagecopyresampled");
+    call_user_function(EG(function_table),NULL,&functionName,&retval,10,resize_params TSRMLS_CC);
 
     int x,y,p,z;
     rw = RW;
@@ -370,17 +354,17 @@ PHP_FUNCTION(smartcrop)
     
     for (y = 0; y < rh; y++) {
         for (x = 0; x < rw; x++) {
-            rgb_ptr = getRgbColorAt(IM_CANVAS,x,y);
+            rgb_ptr = getRgbColorAt(&rim,x,y);
             p = y * rw * 3 + x * 3;
-            od[p+1] = edgeDetect(IM_CANVAS,x,y,rw,rh);
-            od[p] = skinDetect(*(rgb_ptr),*(rgb_ptr+1),*(rgb_ptr+2),sample(IM_CANVAS,x,y));
-            od[p+2] = saturationDetect(*(rgb_ptr),*(rgb_ptr+1),*(rgb_ptr+2),sample(IM_CANVAS,x,y)); 
+            od[p+1] = edgeDetect(&rim,x,y,rw,rh);
+            od[p] = skinDetect(*(rgb_ptr),*(rgb_ptr+1),*(rgb_ptr+2),sample(&rim,x,y));
+            od[p+2] = saturationDetect(*(rgb_ptr),*(rgb_ptr+1),*(rgb_ptr+2),sample(&rim,x,y)); 
         }
     }
     
     scoreOutput = downSample(rw, rh, od);
-    //RETURN_DOUBLE(*(scoreOutput+2)); return;
     crops = generateCrops(rw, rh, dw, dh);
+
     float topScore = -1.0/0.0;
     int topCrop;
     float scoreTmp;
@@ -392,31 +376,23 @@ PHP_FUNCTION(smartcrop)
         cropsNum = (rw - dw)/OPTION_STEP;
     }
     
-//    array_init(return_value);
     for (z = 0; z <= cropsNum*2; z += 2){
         scoreTmp = score(scoreOutput, *(crops+z), *(crops+z+1),dw,dh,rw,rh);
-//        add_next_index_double(return_value, scoreTmp);
         if (topScore < scoreTmp){
             topScore = scoreTmp;
             topCrop = z;
         }
     }
-    
-//    array_init(return_value);
-//    add_next_index_long(return_value, *(crops+topCrop)); 
-//    add_next_index_long(return_value, *(crops+topCrop+1));
 
-    zval *CIM;
+    zval cim;
     ZVAL_LONG(&canvas_params[0], DW);
     ZVAL_LONG(&canvas_params[1], DH);
-    
-    CIM = emalloc(sizeof(zval));
 
-    ZVAL_STRING(function_name, "imagecreatetruecolor");
-    call_user_function(EG(function_table),NULL,function_name,CIM,2,canvas_params TSRMLS_CC); 
+    ZVAL_STRING(&functionName, "imagecreatetruecolor");
+    call_user_function(EG(function_table),NULL,&functionName,&cim,2,canvas_params TSRMLS_CC); 
       
-    ZVAL_ZVAL(&resize_params[0], CIM, 1, 0);
-    ZVAL_ZVAL(&resize_params[1], IM_CANVAS, 1, 0);
+    ZVAL_ZVAL(&resize_params[0], &cim, 1, 0);
+    ZVAL_ZVAL(&resize_params[1], &rim, 1, 0);
     ZVAL_LONG(&resize_params[2],0);
     ZVAL_LONG(&resize_params[3],0);
     ZVAL_LONG(&resize_params[4],*(crops+topCrop));
@@ -425,10 +401,10 @@ PHP_FUNCTION(smartcrop)
     ZVAL_LONG(&resize_params[7],DH);
     ZVAL_LONG(&resize_params[8],DW);
     ZVAL_LONG(&resize_params[9],DH);
-    ZVAL_STRING(function_name, "imagecopyresampled");
-    call_user_function(EG(function_table),NULL,function_name,retval_ptr,10,resize_params TSRMLS_CC);
+    ZVAL_STRING(&functionName, "imagecopyresampled");
+    call_user_function(EG(function_table),NULL,&functionName,&retval,10,resize_params TSRMLS_CC);
 
-    RETURN_ZVAL(CIM,1,0);
+    RETURN_ZVAL(&cim,1,0);
 }
 /* }}} */
 /* The previous line is meant for vim and emacs, so it can correctly fold and
