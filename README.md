@@ -32,5 +32,5 @@ $im = imagecreatefromstring(file_get_contents('/path/to/a/image'));
 $width = 400;
 $height = 400;
 //Call smartcrop function
-$cim = smartcrop($im,400,400);
+$cim = smartcrop($im,$width,$height);
 ```
