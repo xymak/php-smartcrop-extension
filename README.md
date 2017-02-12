@@ -1,8 +1,8 @@
 # php-smartcrop-extension
 
-smartcrop implementation in php-extension
+smartcrop implementation in php-extension.
 
-smartcrop finds optimal crops for images, based on Jonas Wagner's [smartcrop.js](https://github.com/jwagner/smartcrop.js)
+smartcrop finds optimal crops for images, based on Jonas Wagner's [smartcrop.js](https://github.com/jwagner/smartcrop.js).
 
 ![Example](./example.png)
 
@@ -12,7 +12,7 @@ Make sure you have compiled PHP7 environment.
 
 Additionally PHP GD extension is needed to be load into PHP.
 
-This PHP extension can only work on Linux OS
+This PHP extension can only work on Linux OS.
 
 You can install it by running:
 ```
