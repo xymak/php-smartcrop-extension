@@ -4,6 +4,8 @@ smartcrop implementation in php-extension
 
 smartcrop finds optimal crops for images, based on Jonas Wagner's [smartcrop.js](https://github.com/jwagner/smartcrop.js)
 
+![Example](./example.png)
+
 ## Installation
 
 Make sure you have compiled PHP7 environment.
